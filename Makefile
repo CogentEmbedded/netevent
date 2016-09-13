@@ -1,14 +1,15 @@
-prefix = /usr/local
-bindir = $(prefix)/bin
-CXX = g++
-CC = gcc
-CFLAGS = -Wall -pthread
-LDFLAGS = -g -pthread
+PREFIX ?= /usr
+SBINDIR ?= $(PREFIX)/bin
+CXX ?= g++
+CC ?= gcc
+CFLAGS += -Wall -pthread
+LDFLAGS += -g
+LIBS = -lpthread
 
 SOURCES = main.cpp reader.cpp write.cpp showev.cpp
 
 ifneq ($(inotify),no)
-	CFLAGS += -DWITH_INOTIFY
+	GCC_FLAGS += -DWITH_INOTIFY
 endif
 
 all: build netevent devname
@@ -23,13 +24,13 @@ build/%.o: %.c
 	$(CC) $(CFLAGS) -c -o $@ $*.c -MMD -MF build/$*.d -MT $@
 
 netevent: $(patsubst %.cpp,build/%.o,$(SOURCES))
-	$(CXX) $(LDFLAGS) -o $@ $^
+	$(CXX) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 devname: build/devname.o
 	$(CC) -o $@ $^
 
 install: all
-	install -m 755 -p -t "$(DESTDIR)$(bindir)" netevent devname
+	install -m 755 -p -t "$(DESTDIR)$(SBINDIR)" netevent devname
 
 clean:
 	-rm -rf build
