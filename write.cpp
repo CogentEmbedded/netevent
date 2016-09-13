@@ -1,8 +1,17 @@
 #include "main.h"
 #include <sys/wait.h>
 #include <sys/types.h>
+#include <arpa/inet.h>
 #include <stdint.h>
 #include <unistd.h>
+
+int64_t ntohll(int64_t value){
+    int num = 42;
+    if(*(char *)&num == 42) //test big/little endian
+        return value;
+    else
+        return (((int64_t)ntohl(value)) << 32) + ntohl(value >> 32);
+}
 
 static const char *uinput_file[] = {
 	"/dev/uinput",
@@ -35,6 +44,7 @@ int spawn_device()
 	struct input_event ev;
 
 	cin.read((char*)&strsz, sizeof(strsz));
+	strsz = ntohs(strsz);
 	if (strsz != sizeof(uinput_user_dev)) {
 		cerr << "Device information field sizes do not match. Sorry." << endl;
 		return 1;
@@ -126,11 +136,12 @@ int spawn_device()
 			cerr << "End of data" << endl;
 			break;
 		}
-	ev.time.tv_sec = et.tv_sec;
-	ev.time.tv_usec = et.tv_usec;
-	ev.type = et.type;
-	ev.code = et.code;
-	ev.value = et.value;
+		ev.time.tv_sec = ntohll(et.tv_sec);
+		ev.time.tv_usec = ntohl(et.tv_usec);
+		ev.type = ntohs(et.type);
+		ev.code = ntohs(et.code);
+		ev.value = ntohl(et.value);
+		//cErr << "EV " << ev.time.tv_sec << "." << ev.time.tv_usec << ": type " << ev.type << ", code " << ev.code << ", value " << ev.value << endl;
 		if (hotkey_hook(ev.type, ev.code, ev.value))
 			continue;
 		if (write(fd, &ev, sizeof(ev)) < (ssize_t)sizeof(ev)) {

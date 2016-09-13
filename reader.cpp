@@ -3,8 +3,17 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include <sys/types.h>
+#include <arpa/inet.h>
 #include <stdint.h>
 #include <unistd.h>
+
+int64_t htonll(int64_t value){
+    int num = 42;
+    if(*(char *)&num == 42) //test big/little endian
+        return (((int64_t)htonl(value)) << 32) + htonl(value >> 32);
+    else
+        return value;
+}
 
 static bool running = true;
 bool on = true;
@@ -159,7 +168,7 @@ int read_device(const char *devfile)
 
 	// First thing to write is the size of the structures as a 16 bit uint!
 	uint16_t strsz;
-	strsz = sizeof(dev);
+	strsz = htons(sizeof(dev));
 	if (!cout.write((const char*)&strsz, sizeof(strsz)))
 		exit(1);
 	if (cout.eof())
@@ -272,11 +281,11 @@ int read_device(const char *devfile)
 		}
 		else if (on) {
 			input_event_t et;
-			et.tv_sec = ev.time.tv_sec;
-			et.tv_usec = ev.time.tv_usec;
-			et.type = ev.type;
-			et.code = ev.code;
-			et.value = ev.value;
+			et.tv_sec = htonll(ev.time.tv_sec);
+			et.tv_usec = htonl(ev.time.tv_usec);
+			et.type = htons(ev.type);
+			et.code = htons(ev.code);
+			et.value = htonl(ev.value);
 			if (!cout.write((const char*)&et, sizeof(et)))
 				exit(1);
 			if (cout.eof())
