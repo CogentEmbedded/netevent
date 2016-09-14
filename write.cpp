@@ -1,9 +1,13 @@
 #include "main.h"
 #include <sys/wait.h>
 #include <sys/types.h>
+#include <sys/socket.h>
 #include <arpa/inet.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <unistd.h>
+#include <netinet/in.h>
+#include <netdb.h>
 
 int64_t ntohll(int64_t value){
     int num = 42;
@@ -22,12 +26,55 @@ static const size_t uinput_cnt = sizeof(uinput_file) / sizeof(uinput_file[0]);
 
 static uint16_t strsz;
 
-int spawn_device()
+int socket_start_listen(int port)
+{
+	int ret;
+	int sockfd;
+	struct sockaddr_in serv_addr;
+
+	printf("starting on port %d\n", port);
+
+	sockfd = socket(AF_INET, SOCK_STREAM, 0);
+	if (sockfd < 0) {
+		fprintf(stderr, "ERROR opening socket %d", sockfd);
+		return sockfd;
+	}
+	bzero((char *) &serv_addr, sizeof(serv_addr));
+	serv_addr.sin_family = AF_INET;
+	serv_addr.sin_addr.s_addr = INADDR_ANY;
+	serv_addr.sin_port = htons(port);
+	ret = bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
+	if (ret	< 0) {
+		fprintf(stderr, "ERROR on binding %d", ret);
+		return ret;
+	}
+	listen(sockfd, 1);
+	return sockfd;
+}
+
+int socket_wait_connection(int sockfd)
+{
+	int newsockfd;
+	struct sockaddr_in cli_addr;
+	socklen_t clilen;
+
+	clilen = sizeof(cli_addr);
+	newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
+	if (newsockfd < 0) {
+		fprintf(stderr, "ERROR on accept %d", newsockfd);
+		return newsockfd;
+	}
+	return newsockfd;
+}
+
+int spawn_device_new(int sock_con)
 {
 	int e;
 	int fd;
-	size_t i;
+	int i;
 	ssize_t si;
+	struct uinput_user_dev dev;
+	struct input_event ev;
 
 	for (i = 0; i < uinput_cnt; ++i) {
 		fd = open(uinput_file[i], O_WRONLY | O_NDELAY);
@@ -36,30 +83,28 @@ int spawn_device()
 	}
 
 	if (i >= uinput_cnt) {
-		cerr << "Failed to open uinput device file. Please specify." << endl;
+		fprintf(stderr, "Failed to open uinput device file. Please specify.\n");
 		return 1;
 	}
 
-	struct uinput_user_dev dev;
-	struct input_event ev;
-
-	cin.read((char*)&strsz, sizeof(strsz));
+	read(sock_con, (char*)&strsz, sizeof(strsz));
 	strsz = ntohs(strsz);
 	if (strsz != sizeof(uinput_user_dev)) {
-		cerr << "Device information field sizes do not match. Sorry." << endl;
-		return 1;
+		fprintf(stderr, "Device information field sizes do not match (%d != %d). Sorry.\n",
+			strsz, (int)sizeof(uinput_user_dev));
+		goto err_close;
 	}
 
 	memset(&dev, 0, sizeof(dev));
-	cin.read((char*)dev.name, sizeof(dev.name));
-	cin.read((char*)&dev.id, sizeof(dev.id));
+	read(sock_con, dev.name, sizeof(dev.name));
+	read(sock_con, &dev.id, sizeof(dev.id));
 	
-	cin.read((char*)input_bits, sizeof(input_bits));
+	read(sock_con, input_bits, sizeof(input_bits));
 	for (i = 0; i < EV_MAX; ++i) {
 		if (!testbit(input_bits, i))
 			continue;
 		if (ioctl(fd, UI_SET_EVBIT, i) == -1) {
-			cErr << "Failed to set evbit " << i << ": " << err << endl;
+			fprintf(stderr, "Failed to set evbit %d, %d\n", i, errno);
 			goto error;
 		}
 	}
@@ -68,13 +113,13 @@ int spawn_device()
 	do { \
 	if (testbit(input_bits, EV_##REL)) { \
 		unsigned char bits##rel[1+REL_MAX/8]; \
-		cerr << "Reading " #rel "-bits" << endl; \
-		cin.read((char*)bits##rel, sizeof(bits##rel)); \
+		fprintf(stderr, "Reading " #rel "-bits\n"); \
+		read(sock_con, (char*)bits##rel, sizeof(bits##rel)); \
 		for (i = 0; i < REL_MAX; ++i) { \
 			if (!testbit(bits##rel, i)) continue; \
 			if (ioctl(fd, UI_SET_##RELBIT, i) == -1) { \
-				cErr << "Failed to set " #rel "-bit: " << i << ": " << err << endl; \
-				goto error; \
+				fprintf(stderr, "Failed to set " #rel "-bit: %d, %d\n", i, errno); \
+				goto err_close; \
 			} \
 		} \
 	} \
@@ -91,13 +136,13 @@ int spawn_device()
 	do { \
 	if (testbit(input_bits, EV_##KEY)) { \
 		unsigned char bits##key[1+KEY_MAX/8]; \
-		cerr << "Reading " #key "-data" << endl; \
-		cin.read((char*)bits##key, sizeof(bits##key)); \
+		fprintf(stderr, "Reading " #key "-data\n"); \
+		read(sock_con, (char*)bits##key, sizeof(bits##key)); \
 		for (i = 0; i < KEY_MAX; ++i) { \
 			if (!testbit(bits##key, i)) continue; \
 			if (ioctl(fd, UI_SET_##KEYBIT, i) == -1) { \
-				cErr << "Failed to activate " #key "-bit: " << i << ": " << err << endl; \
-				goto error; \
+				fprintf(stderr, "Failed to activate " #key "-bit: %d, %d\n", i, errno); \
+				goto err_close; \
 			} \
 		} \
 	} \
@@ -110,7 +155,7 @@ int spawn_device()
 	if (testbit(input_bits, EV_ABS)) {
 		struct input_absinfo ai;
 		for (i = 0; i < ABS_MAX; ++i) {
-			cin.read((char*)&ai, sizeof(ai));
+			read(sock_con, (char*)&ai, sizeof(ai));
 			dev.absmin[i] = ai.minimum;
 			dev.absmax[i] = ai.maximum;
 		}
@@ -118,22 +163,22 @@ int spawn_device()
 
 	si = write(fd, &dev, sizeof(dev));
 	if (si < (ssize_t)sizeof(dev)) {
-		cErr << "Failed to write initial data to device: " << err << endl;
-		goto error;
+		fprintf(stderr, "Failed to write initial data to device: %d\n", errno);
+		goto err_close;
 	}
 
 	if (ioctl(fd, UI_DEV_CREATE) == -1) {
-		cErr << "Failed to create device: " << err << endl;
-		goto error;
+		fprintf(stderr, "Failed to create device: %d\n", errno);
+		goto err_close;
 	}
 
-	cerr << "Transferring input events." << endl;
+	fprintf(stderr, "Transferring input events.\n");
 	while (true) {
 		input_event_t et;
 		int dummy;
 		waitpid(0, &dummy, WNOHANG);
-		if (!cin.read((char*)&et, sizeof(et))) {
-			cerr << "End of data" << endl;
+		if (!read(sock_con, (char*)&et, sizeof(et))) {
+			fprintf(stderr, "End of data\n");
 			break;
 		}
 		ev.time.tv_sec = ntohll(et.tv_sec);
@@ -141,16 +186,21 @@ int spawn_device()
 		ev.type = ntohs(et.type);
 		ev.code = ntohs(et.code);
 		ev.value = ntohl(et.value);
-		//cErr << "EV " << ev.time.tv_sec << "." << ev.time.tv_usec << ": type " << ev.type << ", code " << ev.code << ", value " << ev.value << endl;
+		//fprintf(stderr, "EV %d.%06d: type %d, code %d, value %d\n",
+		//	(int)ev.time.tv_sec, (int)ev.time.tv_usec, (int)ev.type, ev.code, ev.value);
 		if (hotkey_hook(ev.type, ev.code, ev.value))
 			continue;
 		if (write(fd, &ev, sizeof(ev)) < (ssize_t)sizeof(ev)) {
-			cErr << "Write error: " << err << endl;
-			goto error;
+			fprintf(stderr, "Write error: %d\n", errno);
+			goto err_close;
 		}
 	}
 
 	goto end;
+
+err_close:
+	if (sock_con > 0)
+		close(sock_con);
 error:
 	e = 1;
 end:
@@ -158,4 +208,29 @@ end:
 	close(fd);
 	
 	return e;
+}
+
+int spawn_device(int port)
+{
+	int ret;
+	int sock_listen, sock_con;
+	printf("...%d\n", port);
+
+	sock_listen = socket_start_listen(port);
+	if (sock_listen < 0)
+		return sock_listen;
+
+	printf("Got connection on port %d\n", port);
+	while(1) {
+		sock_con = socket_wait_connection(sock_listen);
+		if (sock_con < 0)
+			goto err_close;
+		ret = spawn_device_new(sock_con);
+		printf("connection closed %d\n", ret);
+		sleep(1);
+	}
+	return 0;
+err_close:
+	close(sock_listen);
+	return -1;
 }

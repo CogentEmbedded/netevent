@@ -9,15 +9,15 @@ bool no_grab = false;
 bool count_syn = false;
 bool be_quiet = false;
 
-int read_device(const char *devname);
-int spawn_device();
+int read_device(const char *devname, const char *hostname, int port);
+int spawn_device(int port);
 int show_events(int count, const char *devname);
 
 static void usage(const char *arg0)
 {
 	size_t len = strlen(arg0);
-	cerr << "usage: " << arg0                  << " [options] -read <device>" << endl;
-	cerr << "       " << std::string(len, ' ') << "           -write" << endl;
+	cerr << "usage: " << arg0                  << " [options] -read <device> <ip/hostname> <port>" << endl;
+	cerr << "       " << std::string(len, ' ') << "           -write <port>" << endl;
 	cerr << "       " << std::string(len, ' ') << " [options] -showevents <count> <device>" << endl;
 	cerr << "options are:" << endl;
 	cerr << "  -ontoggle <command>     Command to execute when grabbing is toggled." << endl;
@@ -53,12 +53,14 @@ int main(int argc, char **argv)
 			usage(arg0);
 		}
 		else if (command == "-read") {
-        		if (argc < 3)
+			if (argc < 5)
 				usage(arg0);
-			return read_device(argv[2]);
+			return read_device(argv[2], argv[3], atoi(argv[4]));
 		}
 		else if (command == "-write") {
-			return spawn_device();
+			if (argc < 3)
+				usage(arg0);
+			return spawn_device(atoi(argv[2]));
 		}
 		else if (command == "-toggler") {
 			if (argc < 3)
