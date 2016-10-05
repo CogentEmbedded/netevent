@@ -8,6 +8,9 @@
 #include <unistd.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
 
 int64_t ntohll(int64_t value){
     int num = 42;
@@ -30,6 +33,8 @@ int socket_start_listen(int port)
 {
 	int ret;
 	int sockfd;
+	int val;
+	
 	struct sockaddr_in serv_addr;
 
 	printf("starting on port %d\n", port);
@@ -48,7 +53,41 @@ int socket_start_listen(int port)
 		fprintf(stderr, "ERROR on binding %d", ret);
 		return ret;
 	}
+
+	val = 1;
+	ret = setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, &val,
+			 sizeof(val));
+	if (ret < 0) {
+		fprintf(stderr, "ERROR on setsockopt %d", ret);
+		return ret;	
+	}
+
+	val = 5;
+	ret = setsockopt(sockfd, IPPROTO_TCP, TCP_KEEPCNT, &val,
+			 sizeof(val));
+	if (ret < 0) {
+		fprintf(stderr, "ERROR on setsockopt %d", ret);
+		return ret;	
+	}
+
+	val = 1;
+	ret = setsockopt(sockfd, IPPROTO_TCP, TCP_KEEPIDLE, &val,
+			 sizeof(val));
+	if (ret < 0) {
+		fprintf(stderr, "ERROR on setsockopt %d", ret);
+		return ret;	
+	}
+
+	val = 1;
+	ret = setsockopt(sockfd, IPPROTO_TCP, TCP_KEEPINTVL, &val,
+			 sizeof(val));
+	if (ret < 0) {
+		fprintf(stderr, "ERROR on setsockopt %d", ret);
+		return ret;	
+	}
+
 	listen(sockfd, 1);
+	
 	return sockfd;
 }
 
@@ -174,10 +213,13 @@ int spawn_device_new(int sock_con)
 
 	fprintf(stderr, "Transferring input events.\n");
 	while (true) {
+		int ret;
 		input_event_t et;
 		int dummy;
 		waitpid(0, &dummy, WNOHANG);
-		if (!read(sock_con, (char*)&et, sizeof(et))) {
+		ret = read(sock_con, (char*)&et, sizeof(et));
+
+		if (ret <= 0) {
 			fprintf(stderr, "End of data\n");
 			break;
 		}

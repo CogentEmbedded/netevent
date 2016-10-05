@@ -11,6 +11,8 @@
 #include <pthread.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
 
 int64_t htonll(int64_t value){
     int num = 42;
@@ -131,6 +133,8 @@ int socket_open(const char *hostname, int port)
 {
 	int ret;
 	int sockfd;
+	int val;
+	
 	struct sockaddr_in serv_addr;
 	struct hostent *server;
 
@@ -159,6 +163,32 @@ int socket_open(const char *hostname, int port)
 		fprintf(stderr, "ERROR connecting %d, %d\n", ret, errno);
 		return ret;
 	}
+
+	val = 5;
+	ret = setsockopt(sockfd, IPPROTO_TCP, TCP_KEEPCNT, &val,
+			 sizeof(val));
+	if (ret < 0) {
+		fprintf(stderr, "ERROR on setsockopt %d", ret);
+		return ret;	
+	}
+
+	val = 1;
+	ret = setsockopt(sockfd, IPPROTO_TCP, TCP_KEEPIDLE, &val,
+			 sizeof(val));
+	if (ret < 0) {
+		fprintf(stderr, "ERROR on setsockopt %d", ret);
+		return ret;	
+	}
+
+	val = 1;
+	ret = setsockopt(sockfd, IPPROTO_TCP, TCP_KEEPINTVL, &val,
+			 sizeof(val));
+	if (ret < 0) {
+		fprintf(stderr, "ERROR on setsockopt %d", ret);
+		return ret;	
+	}
+
+
 	return sockfd;
 }
 
