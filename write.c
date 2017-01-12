@@ -106,6 +106,20 @@ int socket_wait_connection(int sockfd)
 	return newsockfd;
 }
 
+int uinput_open(void)
+{
+	int i;
+	int fd;
+
+	for (i = 0; i < uinput_cnt; ++i) {
+		fd = open(uinput_file[i], O_WRONLY | O_NDELAY);
+		if (fd >= 0)
+			break;
+	}
+
+	return fd;
+}
+
 int spawn_device_new(int sock_con)
 {
 	int e;
@@ -114,23 +128,21 @@ int spawn_device_new(int sock_con)
 	ssize_t si;
 	struct uinput_user_dev dev;
 	struct input_event ev;
+	unsigned char input_bits[1+EV_MAX/8];
 
-	for (i = 0; i < uinput_cnt; ++i) {
-		fd = open(uinput_file[i], O_WRONLY | O_NDELAY);
-		if (fd >= 0)
-			break;
-	}
+	memset(input_bits, 0, sizeof(input_bits));
 
-	if (i >= uinput_cnt) {
+	fd = uinput_open();
+	if (fd < 0) {
 		fprintf(stderr, "Failed to open uinput device file. Please specify.\n");
 		return 1;
 	}
 
 	read(sock_con, (char*)&strsz, sizeof(strsz));
 	strsz = ntohs(strsz);
-	if (strsz != sizeof(uinput_user_dev)) {
+	if (strsz != sizeof(dev)) {
 		fprintf(stderr, "Device information field sizes do not match (%d != %d). Sorry.\n",
-			strsz, (int)sizeof(uinput_user_dev));
+			strsz, (int)sizeof(dev));
 		goto err_close;
 	}
 
@@ -262,13 +274,13 @@ int spawn_device(int port)
 	if (sock_listen < 0)
 		return sock_listen;
 
-	printf("Got connection on port %d\n", port);
 	while(1) {
 		sock_con = socket_wait_connection(sock_listen);
 		if (sock_con < 0)
 			goto err_close;
+		printf("Got connection on port %d\n", port);
 		ret = spawn_device_new(sock_con);
-		printf("connection closed %d\n", ret);
+		printf("...connection closed %d\n", ret);
 		sleep(1);
 	}
 	return 0;

@@ -1,10 +1,10 @@
 #include "main.h"
+
 #include <time.h>
-#include <iomanip>
-#include <sstream>
 #include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <stdio.h>
 
 const char *evname(unsigned int e)
 {
@@ -26,9 +26,28 @@ const char *evname(unsigned int e)
 		ETOS(EV_MAX);
 		default:
 		{
-			std::ostringstream val;
-			val << e;
-			strcpy(buf, val.str().c_str());
+			sprintf(buf, "0x%04x", e);
+			return buf;
+		}
+	}
+	return "<0xDeadC0de>";
+}
+#undef ETOS
+
+const char *absname(unsigned int e)
+{
+	static char buf[128];
+	switch (e) {
+#define ETOS(x) case x: return #x
+		ETOS(ABS_X);
+		ETOS(ABS_Y);
+		ETOS(ABS_MT_POSITION_X);
+		ETOS(ABS_MT_POSITION_Y);
+		ETOS(ABS_MT_TRACKING_ID);
+		ETOS(ABS_MT_SLOT);
+		default:
+		{
+			sprintf(buf, "0x%04x", e);
 			return buf;
 		}
 	}
@@ -60,13 +79,13 @@ static int fd;
 static void toggle_hook()
 {
 	if (ioctl(fd, EVIOCGRAB, (on ? (void*)1 : (void*)0)) == -1) {
-		cErr << "Grab failed: " << err << endl;
+		fprintf(stderr, "Grab failed: %d\n", errno);
 	}
 	setenv("GRAB", (on ? "1" : "0"), 1);
 	if (toggle_cmd) {
 		if (!fork()) {
 			execlp("sh", "sh", "-c", toggle_cmd, NULL);
-			cErr << "Failed to run command: " << err << endl;
+			fprintf(stderr, "Failed to run command: %d\n", errno);
 			exit(1);
 		}
 	}
@@ -82,15 +101,19 @@ void ev_toggle(int sig)
 
 int show_events(int count, const char *devname)
 {
+	int c;
+	ssize_t s;
+	struct input_event ev;
+
 	if (count < 0) {
-		cerr << "Bogus number specified: cannot print " << count << " events." << endl;
+		fprintf(stderr, "Bogus number specified: cannot print %d events.\n", count);
 		return 1;
 	}
 
 	fd = open(devname, O_RDONLY);
 	
 	if (fd < 0) {
-		cErr << "Failed to open device '" << devname << "': " << err << endl;
+		fprintf(stderr, "Failed to open device '%s': %d\n", devname, errno);
 		return 1;
 	}
 
@@ -99,7 +122,7 @@ int show_events(int count, const char *devname)
 	on = !no_grab;
 	if (on) {
 		if (ioctl(fd, EVIOCGRAB, (void*)1) == -1) {
-			cErr << "Failed to grab device: " << err << endl;
+			fprintf(stderr, "Failed to grab device: %d\n", errno);
 			close(fd);
 			return 1;
 		}
@@ -108,38 +131,31 @@ int show_events(int count, const char *devname)
 	else
 		setenv("GRAB", "0", -1);
 
-	struct input_event ev;
-	ssize_t s;
-	int c;
-	if (!be_quiet)
-		cout << std::dec << std::setfill(' ');
 	for (c = 0; !count || c < count; ++c) {
 		int dummy;
 		waitpid(0, &dummy, WNOHANG);
 		s = read(fd, &ev, sizeof(ev));
 		if (s < 0) {
-			cErr << "Error while reading from device: " << err << endl;
+			fprintf(stderr, "Error while reading from device: %d\n", errno);
 			close(fd);
 			return 1;
 		}
 		if (s == 0) {
-			cerr << "End of data." << endl;
+			fprintf(stderr, "End of data.\n");
 			close(fd);
 			return 1;
 		}
 		if (!be_quiet) {
 			time_t curtime = ev.time.tv_sec;
 			struct tm *tmp = localtime(&curtime);
+
+			fprintf(stderr, "Event time: %s", asctime(tmp));
+			fprintf(stderr, " Type = 0x%02x (%s)\n", ev.type, evname(ev.type));
+			fprintf(stderr, " Code = 0x%02x (%s)\n", ev.code,
+				ev.type == EV_ABS ? absname(ev.code) : "");
+			fprintf(stderr, " Value = %d\n", ev.value);
 			if (ev.type == EV_SYN && !count_syn)
-				cout << "   -";
-			else
-				cout << std::right << std::setfill(' ') << std::setw(4) << c;
-			cout << ") Event time: " << asctime(tmp); // asctime contains a newline
-			cout << std::left;
-			cout << "      Type = " << std::setw(3) << ev.type << evname(ev.type)
-			     << "      Code = " << std::setw(6) << ev.code
-			     << "  Value = " << std::setw(6) << ev.value
-			     << endl;
+				fprintf(stderr, "----SYNC---\n");
 			if (!count_syn && ev.type == EV_SYN)
 				--c;
 		}

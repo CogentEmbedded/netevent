@@ -198,14 +198,16 @@ int read_device_new(const char *devfile, const char *hostname, int port)
 	int sock_fd;
 	size_t i;
 	ssize_t s;
-	//int e = 0;
+	unsigned char input_bits[1+EV_MAX/8];
+
+	memset(input_bits, 0, sizeof(input_bits));
+
 	on = !no_grab;
 
 	signal(SIGUSR1, tog_signal);
 	fd = open(devfile, O_RDONLY);
 
 	if (fd < 0) {
-		std::string err(strerror(errno));
 		fprintf(stderr, "Failed to open device '%s', %d\n", devfile, errno);
 		return 1;
 	}
