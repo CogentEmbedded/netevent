@@ -12,7 +12,7 @@ bool be_quiet = false;
 
 int read_device(const char *devname, const char *hostname, int port);
 int spawn_device(int port);
-int spawn_device_fake(int port);
+int spawn_device_emulator(int port);
 int show_events(int count, const char *devname);
 
 /*
@@ -27,6 +27,7 @@ static void usage(const char *arg0)
 	fprintf(stderr, "usage:\n");
 	fprintf(stderr, " %s [options]-read <device> <ip/hostname> <port>\n", arg0);
 	fprintf(stderr, " %s -write <port>         Fully clone other side device, binary protocol\n", arg0);
+	fprintf(stderr, " %s -emulate <port>       Create virtual touch, text protocol (see sources)\n", arg0);
 	fprintf(stderr, "[options] -showevents <count> <device>\n");
 	fprintf(stderr, "options are:\n");
 	fprintf(stderr, "  -ontoggle <command>     Command to execute when grabbing is toggled.\n");
@@ -69,6 +70,11 @@ int main(int argc, char **argv)
 			if (argc < 3)
 				usage(arg0);
 			return spawn_device(atoi(argv[2]));
+		}
+		else if (strcmp(command, "-emulate") == 0) {
+			if (argc < 3)
+				usage(arg0);
+			return spawn_device_emulator(atoi(argv[2]));
 		}
 		else if (strcmp(command, "-toggler") == 0) {
 			if (argc < 3)
