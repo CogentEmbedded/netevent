@@ -5,7 +5,7 @@ CFLAGS += -Wall -pthread
 LDFLAGS += -g
 LIBS = -lpthread
 
-SOURCES = main.c reader.c write.c write2.c showev.c suinput.c
+SOURCES = main.c reader.c write.c emulator.c showev.c suinput.c
 
 ifneq ($(inotify),no)
 	GCC_FLAGS += -DWITH_INOTIFY
