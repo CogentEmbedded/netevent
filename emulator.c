@@ -120,7 +120,7 @@ static int uinput_event(int fd, __u16 type, __u16 code, __s32 value)
 	ev.code = code;
 	ev.value = value;
 
-#if 1
+#if 0
 	fprintf(stderr, "Event time: %d.%06d\n", ev.time.tv_sec, ev.time.tv_usec);
 	fprintf(stderr, " Type = 0x%02x (%s)\n", ev.type, evname(ev.type));
 	fprintf(stderr, " Code = 0x%02x (%s)\n", ev.code,
@@ -263,8 +263,6 @@ static int handle_input_msg(int input_fd, unsigned char *ptr, int size)
 	int i;
 	int ret;
 	int touch_id, touch_x, touch_y;
-
-	printf("%s : buffer = %s \n",__func__, ptr);
 
 	if (!strncmp(ptr, "bye", 3)) {
 		return -1;
