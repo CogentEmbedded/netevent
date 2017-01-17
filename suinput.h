@@ -46,8 +46,8 @@ int suinput_syn(int uinput_fd);
 
 int suinput_destroy(int uinput_fd);
 
-#ifdef uinput_abs_setup
-int suinput_enable_abs_event(int uinput_fd, struct uinput_abs_setup *abs_setup);
+#ifdef UI_ABS_SETUP
+int suinput_enable_abs_event(int uinput_fd, const struct uinput_abs_setup *abs_setup);
 #endif
 
 #ifdef __cplusplus

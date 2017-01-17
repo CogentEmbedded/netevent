@@ -395,7 +395,7 @@ int spawn_device_new_emulator(int sock_fd)
 
 	for (i = 0; i < ARRAY_SIZE(abs_settings); i++) {
 #ifndef OLD_WAY
-		ret = suinput_enable_abs_event(fd, abs_settings[i]);
+		ret = suinput_enable_abs_event(fd, &abs_settings[i]);
 		if (ret)
 			fprintf(stderr, "Failed to setup ABS event 0x%02x: %d\n",
 				abs_settings[i].code, ret);

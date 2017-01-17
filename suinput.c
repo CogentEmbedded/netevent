@@ -216,12 +216,11 @@ int suinput_enable_event(int uinput_fd, uint16_t ev_type, uint16_t ev_code)
 }
 
 #ifdef UI_ABS_SETUP
-int suinput_enable_abs_event(int uinput_fd, struct uinput_abs_setup *abs_setup)
+int suinput_enable_abs_event(int uinput_fd, const struct uinput_abs_setup *abs_setup)
 {
-	int ret;
-
-
-        if (ioctl(uinput_fd, UI_ABS_SETUP, abs_setup) == -1) {
+        if (!abs_setup)
+                return -1;
+        if (ioctl(uinput_fd, UI_ABS_SETUP, *abs_setup) == -1) {
                 return errno;
         }
 }
