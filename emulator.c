@@ -316,7 +316,10 @@ static int handle_input(int sock_fd, int input_fd)
 
 		waitpid(0, &dummy, WNOHANG);
 
-		timeout.tv_sec = 10;
+		if (con_timeout > 0)
+			timeout.tv_sec = con_timeout;
+		else
+			timeout.tv_sec = 10;
 		timeout.tv_usec = 0;
 
 		FD_ZERO(&read_set);
@@ -328,6 +331,10 @@ static int handle_input(int sock_fd, int input_fd)
 			fprintf(stderr, "select return %d\n", ret);
 			break;
 		} else if (ret == 0) {
+			if (con_timeout > 0) {
+				fprintf(stderr, "Closing connection due to timeout\n");
+				break;
+			}
 			continue;
 		}
 

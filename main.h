@@ -21,6 +21,7 @@ extern bool no_grab;
 extern bool count_syn;
 extern bool be_quiet;
 extern bool stop;
+extern int con_timeout;
 
 typedef struct {
 	int type;

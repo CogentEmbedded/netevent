@@ -10,6 +10,7 @@ const char *toggle_cmd = 0;
 bool no_grab = false;
 bool count_syn = false;
 bool be_quiet = false;
+int con_timeout = -1;
 
 bool stop = false;
 
@@ -35,8 +36,9 @@ static void usage(const char *arg0)
 {
 	fprintf(stderr, "usage:\n");
 	fprintf(stderr, " %s [options]-read <device> <ip/hostname> <port>\n", arg0);
-	fprintf(stderr, " %s -write <port>         Fully clone other side device, binary protocol\n", arg0);
-	fprintf(stderr, " %s -emulate <port>       Create virtual touch, text protocol (see sources)\n", arg0);
+	fprintf(stderr, " %s -write <port>          Fully clone other side device, binary protocol\n", arg0);
+	fprintf(stderr, " %s -emulate <port> <timeout> Create virtual touch, text protocol (see sources)\n", arg0);
+	fprintf(stderr, "                              timeout - drop connection after * seconds of silence\n");
 	fprintf(stderr, "[options] -showevents <count> <device>\n");
 	fprintf(stderr, "options are:\n");
 	fprintf(stderr, "  -ontoggle <command>     Command to execute when grabbing is toggled.\n");
@@ -93,6 +95,10 @@ int main(int argc, char **argv)
 		else if (strcmp(command, "-emulate") == 0) {
 			if (argc < 3)
 				usage(arg0);
+			if (argc > 3) {
+				con_timeout = atoi(argv[3]);
+				printf("timeout set to %d\n", con_timeout);
+			}
 			return spawn_device_emulator(atoi(argv[2]));
 		}
 		else if (strcmp(command, "-toggler") == 0) {
