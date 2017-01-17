@@ -1,4 +1,3 @@
-#include "main.h"
 #include <sys/wait.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -11,6 +10,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+
+#include "main.h"
 
 int64_t ntohll(int64_t value){
     int num = 42;

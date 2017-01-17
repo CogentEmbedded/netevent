@@ -1,4 +1,3 @@
-
 #include <sys/wait.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -11,6 +10,9 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+
+#include "main.h"
+#include "suinput.h"
 
 #ifndef UI_ABS_SETUP
 /* old kernel, does not support set abs values one-by-one */

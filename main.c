@@ -1,8 +1,9 @@
-#include "main.h"
-
 #include <unistd.h>
 #include <stdio.h>
 #include <signal.h>
+#include <ctype.h>
+
+#include "main.h"
 
 const char *toggle_file = 0;
 const char *toggle_cmd = 0;

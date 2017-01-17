@@ -1,10 +1,10 @@
-#include "main.h"
-
 #include <time.h>
 #include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <stdio.h>
+
+#include "main.h"
 
 const char *evname(unsigned int e)
 {

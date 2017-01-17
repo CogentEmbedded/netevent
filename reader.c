@@ -1,5 +1,3 @@
-#include "main.h"
-
 #include <signal.h>
 #include <sys/wait.h>
 #include <sys/types.h>
@@ -13,6 +11,8 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+
+#include "main.h"
 
 int64_t htonll(int64_t value){
     int num = 42;
