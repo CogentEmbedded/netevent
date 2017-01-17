@@ -20,6 +20,7 @@ extern const char *toggle_cmd;
 extern bool no_grab;
 extern bool count_syn;
 extern bool be_quiet;
+extern bool stop;
 
 typedef struct {
 	int type;

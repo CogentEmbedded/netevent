@@ -34,7 +34,7 @@ int socket_start_listen(int port)
 {
 	int ret;
 	int sockfd;
-	int val;
+	int val = 1;
 	
 	struct sockaddr_in serv_addr;
 
@@ -42,49 +42,62 @@ int socket_start_listen(int port)
 
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd < 0) {
-		fprintf(stderr, "ERROR opening socket %d", sockfd);
+		fprintf(stderr, "ERROR opening socket %d\n", sockfd);
 		return sockfd;
 	}
+
+	ret = setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &val,
+			 sizeof(val));
+	if (ret < 0) {
+		fprintf(stderr, "ERROR on setsockopt REUSEADDR: %s\n",
+			strerror(errno));
+		return ret;
+	}
+
 	bzero((char *) &serv_addr, sizeof(serv_addr));
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_addr.s_addr = INADDR_ANY;
 	serv_addr.sin_port = htons(port);
 	ret = bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
 	if (ret	< 0) {
-		fprintf(stderr, "ERROR on binding %d", ret);
+		fprintf(stderr, "ERROR on binding: %s\n",
+			strerror(errno));
 		return ret;
 	}
 
-	val = 1;
 	ret = setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, &val,
 			 sizeof(val));
 	if (ret < 0) {
-		fprintf(stderr, "ERROR on setsockopt %d", ret);
-		return ret;	
+		fprintf(stderr, "ERROR on setsockopt KEEPALIVE: %s\n",
+			strerror(errno));
+		return ret;
 	}
 
 	val = 5;
 	ret = setsockopt(sockfd, IPPROTO_TCP, TCP_KEEPCNT, &val,
 			 sizeof(val));
 	if (ret < 0) {
-		fprintf(stderr, "ERROR on setsockopt %d", ret);
-		return ret;	
+		fprintf(stderr, "ERROR on setsockopt KEEPCNT: %s\n",
+			strerror(errno));
+		return ret;
 	}
 
 	val = 1;
 	ret = setsockopt(sockfd, IPPROTO_TCP, TCP_KEEPIDLE, &val,
 			 sizeof(val));
 	if (ret < 0) {
-		fprintf(stderr, "ERROR on setsockopt %d", ret);
-		return ret;	
+		fprintf(stderr, "ERROR on setsockopt KEEPIDLE: %s\n",
+			strerror(errno));
+		return ret;
 	}
 
 	val = 1;
 	ret = setsockopt(sockfd, IPPROTO_TCP, TCP_KEEPINTVL, &val,
 			 sizeof(val));
 	if (ret < 0) {
-		fprintf(stderr, "ERROR on setsockopt %d", ret);
-		return ret;	
+		fprintf(stderr, "ERROR on setsockopt KEEPINTVL: %s\n",
+			strerror(errno));
+		return ret;
 	}
 
 	listen(sockfd, 1);
@@ -101,7 +114,8 @@ int socket_wait_connection(int sockfd)
 	clilen = sizeof(cli_addr);
 	newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
 	if (newsockfd < 0) {
-		fprintf(stderr, "ERROR on accept %d", newsockfd);
+		fprintf(stderr, "ERROR on accept: %s\n",
+			strerror(errno));
 		return newsockfd;
 	}
 	return newsockfd;
@@ -215,12 +229,14 @@ int spawn_device_new(int sock_con)
 
 	si = write(fd, &dev, sizeof(dev));
 	if (si < (ssize_t)sizeof(dev)) {
-		fprintf(stderr, "Failed to write initial data to device: %d\n", errno);
+		fprintf(stderr, "Failed to write initial data to device: %s\n",
+			strerror(errno));
 		goto err_close;
 	}
 
 	if (ioctl(fd, UI_DEV_CREATE) == -1) {
-		fprintf(stderr, "Failed to create device: %d\n", errno);
+		fprintf(stderr, "Failed to create device: %s\n",
+			strerror(errno));
 		goto err_close;
 	}
 

@@ -300,12 +300,13 @@ format_err:
 	return ret;
 }
 
-static int handle_input(int sock_con, int input_fd)
+static int handle_input(int sock_fd, int input_fd)
 {
+	int ret = 0;
 	int tail = 0;
 	unsigned char buffer[RECV_BUFFER_SIZE] = {0};
 
-	while (true) {
+	while (!stop) {
 		int i;
 		int size;
 		int dummy;
@@ -319,25 +320,25 @@ static int handle_input(int sock_con, int input_fd)
 		timeout.tv_usec = 0;
 
 		FD_ZERO(&read_set);
-		FD_SET(sock_con, &read_set);
+		FD_SET(sock_fd, &read_set);
 
-		int ret = select(sock_con + 1, &read_set, NULL, NULL, &timeout);
+		ret = select(sock_fd + 1, &read_set, NULL, NULL, &timeout);
 
 		if (ret < 0) {
 			fprintf(stderr, "select return %d\n", ret);
-			return ret;
+			break;
 		} else if (ret == 0) {
 			continue;
 		}
 
-		ret = recv(sock_con, buffer,
+		ret = recv(sock_fd, buffer,
 			RECV_BUFFER_SIZE, MSG_DONTWAIT);
 		if (ret < 0) {
 			fprintf(stderr, "recv return %d\n", ret);
 			return ret;
 		} else if (ret == 0) {
 			fprintf(stderr, "recv == 0, shutdown\n");
-			return ret;
+			break;
 		}
 
 		size = ret;
@@ -355,10 +356,12 @@ static int handle_input(int sock_con, int input_fd)
 			    token = strtok (NULL, "\n");
 			    start = token;
 			}
+			/* TODO: handle sliced messages */
 		}
 		memset(buffer, 0, size);
 	}
-	return 0;
+	close(sock_fd);
+	return ret;
 }
 
 int spawn_device_new_emulator(int sock_fd)
@@ -404,7 +407,8 @@ int spawn_device_new_emulator(int sock_fd)
 
 	si = write(fd, &dev, sizeof(dev));
 	if (si < (ssize_t)sizeof(dev)) {
-		fprintf(stderr, "Failed to write initial data to device: %d\n", errno);
+		fprintf(stderr, "Failed to write initial data to device: %s\n",
+			strerror(errno));
 		goto err_close;
 	}
 
@@ -418,7 +422,8 @@ int spawn_device_new_emulator(int sock_fd)
 #endif
 
 	if (ioctl(fd, UI_DEV_CREATE) == -1) {
-		fprintf(stderr, "Failed to create device: %d\n", errno);
+		fprintf(stderr, "Failed to create device: %s\n",
+			strerror(errno));
 		goto err_close;
 	}
 
@@ -429,13 +434,11 @@ int spawn_device_new_emulator(int sock_fd)
 err_close:
 	if (sock_fd > 0)
 		close(sock_fd);
-error:
-	e = 1;
 end:
 	ioctl(fd, UI_DEV_DESTROY);
 	close(fd);
-	
-	return e;
+
+	return ret;
 }
 
 int spawn_device_emulator(int port)
@@ -448,7 +451,8 @@ int spawn_device_emulator(int port)
 	if (sock_listen < 0)
 		return sock_listen;
 
-	while(1) {
+	while(!stop) {
+		printf("Waiting for connection on port %d\n", port);
 		sock_con = socket_wait_connection(sock_listen);
 		if (sock_con < 0)
 			goto err_close;
@@ -456,6 +460,7 @@ int spawn_device_emulator(int port)
 		ret = spawn_device_new_emulator(sock_con);
 		printf("...connection closed %d\n", ret);
 	}
+	close(sock_listen);
 	return 0;
 err_close:
 	close(sock_listen);

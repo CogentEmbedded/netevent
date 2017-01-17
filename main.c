@@ -11,6 +11,8 @@ bool no_grab = false;
 bool count_syn = false;
 bool be_quiet = false;
 
+bool stop = false;
+
 int read_device(const char *devname, const char *hostname, int port);
 int spawn_device(int port);
 int spawn_device_emulator(int port);
@@ -22,6 +24,12 @@ static int isdigit(char ch)
 	return ((ch <= '9') && (ch >= '0'));
 }
 */
+
+void sigint_handler(int sig)
+{
+	printf("Signal\n");
+	stop = true;
+}
 
 static void usage(const char *arg0)
 {
@@ -49,9 +57,19 @@ static void usage(const char *arg0)
 
 int main(int argc, char **argv)
 {
+	struct sigaction sa;
 	const char *arg0 = argv[0];
 	if (argc < 2)
 		usage(arg0);
+
+	sa.sa_handler = sigint_handler;
+	sa.sa_flags = 0; // or SA_RESTART
+	sigemptyset(&sa.sa_mask);
+
+	if (sigaction(SIGINT, &sa, NULL) == -1) {
+		fprintf(stderr, "sigaction failed");
+		exit(1);
+	}
 
 	while (1) {
 		if (argc < 2)
