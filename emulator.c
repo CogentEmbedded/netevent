@@ -1,4 +1,3 @@
-#include "main.h"
 
 #include <sys/wait.h>
 #include <sys/types.h>
@@ -68,11 +67,11 @@ static struct uinput_user_dev dev = {
 static struct uinput_abs_setup abs_settings[] ={
 	{
 		.code = ABS_X,
-		.absinfo = {0, 0, RESOLUTION_X - 1, 0, 0, 32},
+		.absinfo = {0, 0, RESOLUTION_X - 1, 0, 0, 0},
 	},
 	{
 		.code = ABS_Y,
-		.absinfo = {0, 0, RESOLUTION_Y - 1, 0, 0, 32},
+		.absinfo = {0, 0, RESOLUTION_Y - 1, 0, 0, 0},
 	},
 	{
 		.code = ABS_MT_SLOT,
@@ -80,15 +79,15 @@ static struct uinput_abs_setup abs_settings[] ={
 	},
 	{
 		.code = ABS_MT_POSITION_X,
-		.absinfo = {0, 0, RESOLUTION_X - 1, 0, 0, 32},
+		.absinfo = {0, 0, RESOLUTION_X - 1, 0, 0, 0},
 	},
 	{
 		.code = ABS_MT_POSITION_Y,
-		.absinfo = {0, 0, RESOLUTION_Y - 1, 0, 0, 32},
+		.absinfo = {0, 0, RESOLUTION_Y - 1, 0, 0, 0},
 	},
 	{
 		.code = ABS_MT_TRACKING_ID,
-		.absinfo = {0, 0, MAX_TRACK, 0, 0, 32},
+		.absinfo = {0, 0, MAX_TRACK, 0, 0, 0},
 	},
 };
 
@@ -263,49 +262,32 @@ static int handle_input_msg(int input_fd, unsigned char *ptr, int size)
 	int ret;
 	int touch_id, touch_x, touch_y;
 
-	/* plus terminating */
-	unsigned char buffer[RECV_BUFFER_SIZE + 1];
+	printf("%s : buffer = %s \n",__func__, ptr);
 
-	if (size > RECV_BUFFER_SIZE)
+	if (!strncmp(ptr, "bye", 3)) {
 		return -1;
-
-	memcpy(buffer, ptr, size);
-
-	while((size) &&
-		((buffer[size] == '\n') || (buffer[size] == '\r') || (buffer[size] == 0)))
-		buffer[size--] = 0;
-
-	/* empty line */
-	if (size == 0)
-		return 0;
-	buffer[size + 1] = 0;
-
-	/* we dont take care of spaces at begin of message, sorry */
-
-	if (!strncmp(buffer, "bye", 3)) {
-		return -1;
-	} else if (!strncmp(buffer, "touch-start", 11)) {
-		ret = !(3 == sscanf(buffer, "%*s %d %d %d\n",
+	} else if (!strncmp(ptr, "touch-start", 11)) {
+		ret = !(3 == sscanf(ptr, "%*s %d %d %d\n",
 			&touch_id, &touch_x, &touch_y));
 		if (ret)
 			goto format_err;
 		ret = uinput_touch_start(input_fd, touch_id, touch_x, touch_y);
-	} else if (!strncmp(buffer, "touch-move", 10)) {
-		ret = !(3 == sscanf(buffer, "%*s %d %d %d\n",
+	} else if (!strncmp(ptr, "touch-move", 10)) {
+		ret = !(3 == sscanf(ptr, "%*s %d %d %d\n",
 			&touch_id, &touch_x, &touch_y));
 		if (ret)
 			goto format_err;
 		ret = uinput_touch_move(input_fd, touch_id, touch_x, touch_y);
-	} else if (!strncmp(buffer, "touch-end", 9)) {
-		ret = !(1 == sscanf(buffer, "%*s %d\n",
+	} else if (!strncmp(ptr, "touch-end", 9)) {
+		ret = !(1 == sscanf(ptr, "%*s %d\n",
 			&touch_id));
 		if (ret)
 			goto format_err;
 		ret = uinput_touch_end(input_fd, touch_id);
-	} else if (!strncmp(buffer, "sync", 4)) {
+	} else if (!strncmp(ptr, "sync", 4)) {
 		/* nope for now */
 	} else {
-		fprintf(stderr, "\"%s\"\nAugh?\n", buffer);
+		fprintf(stderr, "\"%s\"\nAugh?\n", ptr);
 		return 0;
 	}
 
@@ -314,14 +296,14 @@ static int handle_input_msg(int input_fd, unsigned char *ptr, int size)
 	return ret;
 
 format_err:
-	fprintf(stderr, "Message format error:\n%s\n", buffer);
+	fprintf(stderr, "Message format error:\n%s\n", ptr);
 	return ret;
 }
 
 static int handle_input(int sock_con, int input_fd)
 {
 	int tail = 0;
-	unsigned char buffer[RECV_BUFFER_SIZE];
+	unsigned char buffer[RECV_BUFFER_SIZE] = {0};
 
 	while (true) {
 		int i;
@@ -348,8 +330,8 @@ static int handle_input(int sock_con, int input_fd)
 			continue;
 		}
 
-		ret = recv(sock_con, buffer + tail, 
-			RECV_BUFFER_SIZE - tail, MSG_DONTWAIT);
+		ret = recv(sock_con, buffer,
+			RECV_BUFFER_SIZE, MSG_DONTWAIT);
 		if (ret < 0) {
 			fprintf(stderr, "recv return %d\n", ret);
 			return ret;
@@ -358,19 +340,23 @@ static int handle_input(int sock_con, int input_fd)
 			return ret;
 		}
 
-		tail += ret;
-		size = tail;
+		size = ret;
 
-		while ((size) && (end = buffer_has_str(buffer, size))) {
-			ret = handle_input_msg(input_fd, buffer, end);
-			if (ret < 0)
-				return ret;
+		{
+			char * start = buffer;
+			char * token = strtok (buffer,"\n");
 
-			size -= end;
-			tail -= end;
-			/* nice */
-			memmove(buffer + end, buffer, size);
+			while (token != NULL)
+			{
+			    ret = handle_input_msg(input_fd, token, token - start);
+			    if (ret < 0)
+                                return ret;
+
+			    token = strtok (NULL, "\n");
+			    start = token;
+			}
 		}
+		memset(buffer, 0, size);
 	}
 	return 0;
 }
