@@ -455,7 +455,6 @@ int spawn_device_emulator(int port)
 		printf("Got connection on port %d\n", port);
 		ret = spawn_device_new_emulator(sock_con);
 		printf("...connection closed %d\n", ret);
-		sleep(1);
 	}
 	return 0;
 err_close:
