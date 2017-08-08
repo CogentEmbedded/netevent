@@ -40,7 +40,7 @@ int socket_start_listen(int port)
 
 	printf("starting on port %d\n", port);
 
-	sockfd = socket(AF_INET, SOCK_STREAM, 0);
+	sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	if (sockfd < 0) {
 		fprintf(stderr, "ERROR opening socket %d\n", sockfd);
 		return sockfd;

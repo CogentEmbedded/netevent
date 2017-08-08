@@ -11,6 +11,8 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 
+#include <linux/types.h>
+
 #include "main.h"
 #include "suinput.h"
 
@@ -46,10 +48,47 @@ static uint16_t strsz;
 
 extern int64_t ntohll(int64_t value);
 extern int uinput_open(void);
-extern int socket_start_listen(int port);
-extern int socket_wait_connection(int sockfd);
 extern int uinput_open(void);
 
+static int udp_socket_start_listen(int port)
+{
+	int ret;
+	int sockfd;
+	int val = 1;
+	
+	struct sockaddr_in serv_addr;
+
+	printf("starting on port %d\n", port);
+
+	sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+	if (sockfd < 0) {
+		fprintf(stderr, "ERROR opening socket %d\n", sockfd);
+		return sockfd;
+	}
+
+	bzero((char *) &serv_addr, sizeof(serv_addr));
+	serv_addr.sin_family = AF_INET;
+	serv_addr.sin_addr.s_addr = INADDR_ANY;
+	serv_addr.sin_port = htons(port);
+	
+	ret = bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
+	if (ret	< 0) {
+		fprintf(stderr, "ERROR on binding: %s\n",
+			strerror(errno));
+		return ret;
+	}
+
+	return sockfd;
+}
+
+static int udp_socket_wait_connection(int sockfd)
+{
+  return 0;
+}
+static int udp_socket_close(int sockfd)
+{
+	return close(sockfd);
+}
 static struct uinput_user_dev dev = {
 	.name = "CogentEmbedded virtual touch",
 	.id = {
@@ -61,8 +100,8 @@ static struct uinput_user_dev dev = {
 	.ff_effects_max = 0x0,
 };
 
-#define RESOLUTION_X	4096
-#define RESOLUTION_Y	4096
+#define RESOLUTION_X	1080
+#define RESOLUTION_Y	1920
 #define TOUCH_SLOTS	10
 #define MAX_TRACK	65535
 
@@ -261,35 +300,45 @@ static int uinput_touch_end(int fd, unsigned int id)
 static int handle_input_msg(int input_fd, unsigned char *ptr, int size)
 {
 	int i;
-	int ret;
+	int ret = 0;
 	int touch_id, touch_x, touch_y;
-
-	if (!strncmp(ptr, "bye", 3)) {
-		return -1;
-	} else if (!strncmp(ptr, "touch-start", 11)) {
-		ret = !(3 == sscanf(ptr, "%*s %d %d %d\n",
-			&touch_id, &touch_x, &touch_y));
-		if (ret)
-			goto format_err;
-		ret = uinput_touch_start(input_fd, touch_id, touch_x, touch_y);
-	} else if (!strncmp(ptr, "touch-move", 10)) {
-		ret = !(3 == sscanf(ptr, "%*s %d %d %d\n",
-			&touch_id, &touch_x, &touch_y));
-		if (ret)
-			goto format_err;
-		ret = uinput_touch_move(input_fd, touch_id, touch_x, touch_y);
-	} else if (!strncmp(ptr, "touch-end", 9)) {
-		ret = !(1 == sscanf(ptr, "%*s %d\n",
-			&touch_id));
-		if (ret)
-			goto format_err;
-		ret = uinput_touch_end(input_fd, touch_id);
-	} else if (!strncmp(ptr, "sync", 4)) {
-		/* nope for now */
-	} else {
-		fprintf(stderr, "\"%s\"\nAugh?\n", ptr);
-		return 0;
+	int package_size = ptr[0];
+	// one byte size +  + 2 byte endings
+	++ptr;
+	printf("package_size = %d\n",package_size);
+	if (!package_size)
+	{
+		uinput_touch_end(input_fd, 0);
+		uinput_touch_end(input_fd, 1);
+		uinput_touch_end(input_fd, 2);
+		uinput_touch_end(input_fd, 3);
+		uinput_touch_end(input_fd, 4);
+		uinput_touch_end(input_fd, 5);
+		uinput_touch_end(input_fd, 6);
+		uinput_touch_end(input_fd, 7);
+		uinput_touch_end(input_fd, 8);
+		uinput_touch_end(input_fd, 9);
 	}
+	for(i = 0; i < package_size; i++)
+	{
+		int16_t x = -1;
+		int16_t y = -1;
+		uint8_t pressure = 0;
+
+		x = ((ptr[1]<<8) + ptr[2]);
+		y = ((ptr[3]<<8) + ptr[4]);
+		pressure = ptr[5];
+		printf("TOUCH ID = %u ",ptr[0]);
+		printf("(XxY, w) = (%dx%d, %u)\n", x, y, pressure);
+		
+		if((x != -1) && (y != -1))
+		    uinput_touch_move(input_fd, ptr[0],x,y);
+		else
+			uinput_touch_end(input_fd,ptr[0]);
+		
+		ptr += (i+1)*6;
+	}
+
 
 	if (ret)
 		fprintf(stderr, "uinput write error: %d\n", ret);
@@ -305,67 +354,29 @@ static int handle_input(int sock_fd, int input_fd)
 	int ret = 0;
 	int tail = 0;
 	unsigned char buffer[RECV_BUFFER_SIZE] = {0};
-
+	struct sockaddr_in si_other;
+	int recv_len = 0;
+    int slen = sizeof(si_other);
+	
 	while (!stop) {
-		int i;
-		int size;
-		int dummy;
-		int end;
-		fd_set read_set;
-		struct timeval timeout;
+		// int i;
+		// int size;
+		// int dummy;
+		// int end;
+		// fd_set read_set;
+		// struct timeval timeout;
 
-		waitpid(0, &dummy, WNOHANG);
+		if ((ret = recvfrom(sock_fd, buffer, RECV_BUFFER_SIZE, 0, (struct sockaddr *) &si_other, &slen)) == -1)
+        {
+        	printf("Error : %d\n", ret);	
+           continue;
+        }
+        printf("Received packet from %s:%d\n", inet_ntoa(si_other.sin_addr), ntohs(si_other.sin_port));
+        printf("DataLenght = %d Data: %s\n" ,ret ,buffer);
 
-		if (con_timeout > 0)
-			timeout.tv_sec = con_timeout;
-		else
-			timeout.tv_sec = 10;
-		timeout.tv_usec = 0;
+		handle_input_msg(input_fd, buffer, ret);
+		memset(buffer, 0, ret);
 
-		FD_ZERO(&read_set);
-		FD_SET(sock_fd, &read_set);
-
-		ret = select(sock_fd + 1, &read_set, NULL, NULL, &timeout);
-
-		if (ret < 0) {
-			fprintf(stderr, "select return %d\n", ret);
-			break;
-		} else if (ret == 0) {
-			if (con_timeout > 0) {
-				fprintf(stderr, "Closing connection due to timeout\n");
-				break;
-			}
-			continue;
-		}
-
-		ret = recv(sock_fd, buffer,
-			RECV_BUFFER_SIZE, MSG_DONTWAIT);
-		if (ret < 0) {
-			fprintf(stderr, "recv return %d\n", ret);
-			return ret;
-		} else if (ret == 0) {
-			fprintf(stderr, "recv == 0, shutdown\n");
-			break;
-		}
-
-		size = ret;
-
-		{
-			char * start = buffer;
-			char * token = strtok (buffer,"\n");
-
-			while (token != NULL)
-			{
-			    ret = handle_input_msg(input_fd, token, token - start);
-			    if (ret < 0)
-                                return ret;
-
-			    token = strtok (NULL, "\n");
-			    start = token;
-			}
-			/* TODO: handle sliced messages */
-		}
-		memset(buffer, 0, size);
 	}
 	close(sock_fd);
 	return ret;
@@ -448,28 +459,26 @@ end:
 	return ret;
 }
 
+#define BUFLEN 512
+#define PORT 9930
 int spawn_device_emulator(int port)
 {
 	int ret;
-	int sock_listen, sock_con;
-	printf("...%d\n", port);
-
-	sock_listen = socket_start_listen(port);
+	int sock_listen;
+	
+	sock_listen = udp_socket_start_listen(port);
 	if (sock_listen < 0)
 		return sock_listen;
-
-	while(!stop) {
-		printf("Waiting for connection on port %d\n", port);
-		sock_con = socket_wait_connection(sock_listen);
-		if (sock_con < 0)
-			goto err_close;
-		printf("Got connection on port %d\n", port);
-		ret = spawn_device_new_emulator(sock_con);
+	
+	while(!stop) 
+	{
+		printf("Waiting for connection on UDP port %d\n", port);
+		ret = spawn_device_new_emulator(sock_listen);
 		printf("...connection closed %d\n", ret);
 	}
-	close(sock_listen);
+	udp_socket_close(sock_listen);
 	return 0;
 err_close:
-	close(sock_listen);
+	udp_socket_close(sock_listen);
 	return -1;
 }
