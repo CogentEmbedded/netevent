@@ -188,7 +188,6 @@ int socket_open(const char *hostname, int port)
 		return ret;	
 	}
 
-
 	return sockfd;
 }
 
@@ -202,6 +201,8 @@ int read_device_new(const char *devfile, const char *hostname, int port)
 	on = !no_grab;
 
 	signal(SIGUSR1, tog_signal);
+	signal(SIGPIPE, SIG_IGN);
+
 	fd = open(devfile, O_RDONLY);
 
 	if (fd < 0) {
@@ -340,7 +341,7 @@ int read_device_new(const char *devfile, const char *hostname, int port)
 		}
 		else if (on) {
 			input_event_t et;
-
+			int val;
 			//fprintf(stderr, "EV %d.%06d: type %d, code %d, value %d\n",
 			//	(int)ev.time.tv_sec, (int)ev.time.tv_usec, (int)ev.type, ev.code, ev.value);
 			et.tv_sec = htonll(ev.time.tv_sec);
@@ -348,8 +349,11 @@ int read_device_new(const char *devfile, const char *hostname, int port)
 			et.type = htons(ev.type);
 			et.code = htons(ev.code);
 			et.value = htonl(ev.value);
-			if (!write(sock_fd, (const char*)&et, sizeof(et)))
+			val = write(sock_fd, (const char*)&et, sizeof(et));
+			if (val <= 0) {
+				fprintf(stderr, "When writin to socket: %d\n", errno);
 				goto err_close;
+			}
 		}
 	}
 
