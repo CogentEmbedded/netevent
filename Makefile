@@ -27,7 +27,7 @@ netevent: $(patsubst %.cpp,build/%.o,$(SOURCES))
 	$(CXX) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 devname: build/devname.o
-	$(CC) -o $@ $^
+	$(CC) $(LDFLAGS) -o $@ $^
 
 install: all
 	install -m 755 -p -t "$(DESTDIR)$(SBINDIR)" netevent devname
